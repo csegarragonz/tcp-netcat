@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::{
     env,
     io::{
@@ -9,12 +10,141 @@ use std::{
         TcpListener,
         TcpStream,
     },
+    process::{
+        Child,
+        Command,
+        Stdio,
+    },
+    str::FromStr,
     time::{
         UNIX_EPOCH,
         Instant,
         SystemTime,
     },
 };
+
+// TODO: make this a parameter?
+// TODO: this is for koala9
+const CLIENT_CORE_STR: &str = "0-9";
+const NANVIX_LINUXD_CORE_STR: &str = "10-14";
+const NANVIX_NANOVM_CORE_STR: &str = "15-19";
+
+// TODO: make this a parameter?
+const NANVIX_LINUXD_UNIX_SOCKET: &str = "/tmp/nanvix_datapath_ubench.socket";
+const GATEWAY_ADDRESS: &str = "127.0.0.1:9999";
+
+// TODO: update me when we decide where to place this (and make it relative
+// to the manifest dir)
+fn get_proj_root() -> String {
+    "/home/csegarra/git/nanvix/nanvi".to_string()
+}
+
+struct HwLoc {
+    linuxd_core_str: String,
+    nanovm_core_str: String,
+}
+
+struct Benchmark {
+    hwloc: HwLoc,
+    linuxd: Option<Child>,
+    nanovm: Option<Child>,
+    gateway: Option<TcpStream>,
+    gateway_address: String,
+    linuxd_address: String,
+}
+
+enum BenchmarkFlavour {
+    SingleEcho,
+    MultiEcho,
+    EchoBreakdown,
+}
+
+impl FromStr for BenchmarkFlavour {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "single-echo" => Ok(BenchmarkFlavour::SingleEcho),
+            "multi-echo" => Ok(BenchmarkFlavour::MultiEcho),
+            "echo-breakdown" => Ok(BenchmarkFlavour::EchoBreakdown),
+            _ => Err(format!("Invalid benchmark type: {}", s)),
+        }
+    }
+}
+
+impl Benchmark {
+    fn start_gateway(&mut self) -> Result<TcpStream> {
+        println!("Binding to {}...", &self.gateway_address);
+        let listener = TcpListener::bind(&self.gateway_address)?;
+
+        self.linuxd = Some(self.start_linuxd().unwrap());
+
+        let (mut stream, connect) = listener.accept()?;
+        println!("Connected to: {connect}");
+
+        Ok(stream)
+    }
+
+    fn start_linuxd(&self) -> Result<Child> {
+        let linuxd_args: Vec<String> = vec![
+            "taskset".to_string(),
+            "-ac".to_string(),
+            self.hwloc.linuxd_core_str.to_string(),
+            format!("{}/bin/linuxd.elf", get_proj_root()),
+            "-bind-addr".to_string(),
+            self.linuxd_address.clone(),
+            "-gateway-addr".to_string(),
+            self.gateway_address.to_string(),
+            "-gateway-socket-type".to_string(),
+            "tcp".to_string(),
+        ];
+
+        let linuxd_cmd = Command::new(&linuxd_args[0])
+            .args(&linuxd_args[1..])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .current_dir(get_proj_root())
+            .spawn()?;
+
+        Ok(linuxd_cmd)
+    }
+
+    fn start_nanovm(&self) -> Result<Child> {
+        let nanovm_args: Vec<String> = vec![
+            "taskset".to_string(),
+            "-ac".to_string(),
+            self.hwloc.nanovm_core_str.to_string(),
+            format!("{}/bin/microvm.elf", get_proj_root()),
+            "-kernel".to_string(),
+            format!("{}/bin/kernel.elf", get_proj_root()),
+            "-initrd".to_string(),
+            format!("{}/bin/echo-rust-server-nostd.elf", get_proj_root()),
+            "-gateway".to_string(),
+            self.linuxd_address.clone(),
+        ];
+
+        let nanovm_cmd = Command::new(&nanovm_args[0])
+            .args(&nanovm_args[1..])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .current_dir(get_proj_root())
+            .spawn()?;
+
+        Ok(nanovm_cmd)
+    }
+
+    // Main entrypoint to set-up the experiment.
+    pub fn setup(&mut self) {
+        // This starts linuxd under the hood.
+        self.gateway = Some(self.start_gateway().unwrap());
+        self.nanovm = Some(self.start_nanovm().unwrap());
+
+        // Now we are ready to run experiments by pushing messages to the
+        // gateway stream.
+    }
+}
 
 fn benchmark(stream: &mut TcpStream) {
     const DATA_SIZE: usize = 10;
