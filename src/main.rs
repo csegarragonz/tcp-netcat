@@ -1,49 +1,20 @@
 use anyhow::Result;
 use flexi_logger::Logger;
-use indicatif::{
-    ProgressBar,
-    ProgressStyle,
-};
-use log::{
-    debug,
-    error,
-};
+use indicatif::{ProgressBar, ProgressStyle};
+use log::{debug, error};
 use nix::{
-    sys::signal::{
-        Signal,
-        kill,
-    },
+    sys::signal::{Signal, kill},
     unistd::Pid,
 };
 use std::{
-    env,
-    fmt,
-    fs,
-    io::{
-        self,
-        ErrorKind,
-        Read,
-        Write
-    },
+    env, fmt, fs,
+    io::{self, ErrorKind, Read, Write},
     mem,
-    net::{
-        TcpListener,
-        TcpStream,
-    },
-    process::{
-        self,
-        Child,
-        Command,
-        Stdio,
-    },
+    net::{TcpListener, TcpStream},
+    process::{self, Child, Command, Stdio},
     str::FromStr,
     thread,
-    time::{
-        UNIX_EPOCH,
-        Duration,
-        Instant,
-        SystemTime,
-    },
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 // TODO: make this a parameter?
@@ -134,7 +105,10 @@ impl Benchmark {
     /// Read message from gateway by first parsing the length as an u32 LE.
     fn recv_from_gateway(&mut self, data_size: usize) -> Result<Vec<u8>> {
         let mut response_payload: Vec<u8> = vec![0u8; mem::size_of::<u32>() + data_size];
-        self.gateway.as_mut().unwrap().read_exact(&mut response_payload)?;
+        self.gateway
+            .as_mut()
+            .unwrap()
+            .read_exact(&mut response_payload)?;
 
         Ok(response_payload[mem::size_of::<u32>()..].to_vec())
     }
@@ -176,9 +150,13 @@ impl Benchmark {
             format!("{}/bin/kernel.elf", get_proj_root()),
             "-initrd".to_string(),
             match self.flavour {
-                BenchmarkFlavour::WarmStart => format!("{}/bin/echo-rust-server-nostd.elf", get_proj_root()),
+                BenchmarkFlavour::WarmStart => {
+                    format!("{}/bin/echo-rust-server-nostd.elf", get_proj_root())
+                }
                 // TODO: make this a different one without expecting an EoF?
-                BenchmarkFlavour::EchoBreakdown | BenchmarkFlavour::ColdStart => format!("{}/bin/echo-rust-nostd.elf", get_proj_root()),
+                BenchmarkFlavour::EchoBreakdown | BenchmarkFlavour::ColdStart => {
+                    format!("{}/bin/echo-rust-nostd.elf", get_proj_root())
+                }
             },
             "-gateway".to_string(),
             self.linuxd_address.clone(),
@@ -225,16 +203,22 @@ impl Benchmark {
     pub fn cleanup(&mut self) {
         if self.nanovm.is_some() {
             debug!("Sending SIGINT to nano VM");
-            match kill(Pid::from_raw(self.nanovm.as_mut().unwrap().id() as i32), Signal::SIGINT) {
-                Ok(_) => {},
+            match kill(
+                Pid::from_raw(self.nanovm.as_mut().unwrap().id() as i32),
+                Signal::SIGINT,
+            ) {
+                Ok(_) => {}
                 Err(e) => error!("error sending SIGINT to nano VM: {e:?}"),
             }
         }
 
         if self.linuxd.is_some() {
             debug!("Sending SIGINT to linuxd");
-            match kill(Pid::from_raw(self.linuxd.as_mut().unwrap().id() as i32), Signal::SIGINT) {
-                Ok(_) => {},
+            match kill(
+                Pid::from_raw(self.linuxd.as_mut().unwrap().id() as i32),
+                Signal::SIGINT,
+            ) {
+                Ok(_) => {}
                 Err(e) => error!("error sending linuxd to nano VM: {e:?}"),
             }
         }
@@ -244,11 +228,14 @@ impl Benchmark {
             Ok(_) => debug!("removed linuxd socket at: {}", &self.linuxd_address),
             Err(ref e) if e.kind() == ErrorKind::NotFound => {
                 debug!("linuxd socket not found");
-            },
+            }
             Err(e) => {
                 // Non-fatal error, we are cleaning-up.
-                error!("failed to delete linuxd socket file (file: {} - error: {e:?})", &self.linuxd_address);
-            },
+                error!(
+                    "failed to delete linuxd socket file (file: {} - error: {e:?})",
+                    &self.linuxd_address
+                );
+            }
         }
 
         // Gateway will be closed when dropped.
@@ -287,7 +274,10 @@ impl Benchmark {
             self.gateway.as_mut().unwrap().write_all(&payload)?;
 
             let mut response_payload: Vec<u8> = vec![0u8; mem::size_of::<u32>() + data.len()];
-            self.gateway.as_mut().unwrap().read_exact(&mut response_payload)?;
+            self.gateway
+                .as_mut()
+                .unwrap()
+                .read_exact(&mut response_payload)?;
             latencies.push(start.elapsed().as_micros());
 
             // Sanity-check the message to make sure is the same we sent.
@@ -307,9 +297,18 @@ impl Benchmark {
         pb.finish();
         println!("First req: {} us", latencies[0]);
         latencies.sort();
-        println!("p50: {} us", latencies[(num_iterations as f32 * 0.5) as usize]);
-        println!("p95: {} us", latencies[(num_iterations as f32 * 0.95) as usize]);
-        println!("p99: {} us", latencies[(num_iterations as f32 * 0.99) as usize]);
+        println!(
+            "p50: {} us",
+            latencies[(num_iterations as f32 * 0.5) as usize]
+        );
+        println!(
+            "p95: {} us",
+            latencies[(num_iterations as f32 * 0.95) as usize]
+        );
+        println!(
+            "p99: {} us",
+            latencies[(num_iterations as f32 * 0.99) as usize]
+        );
 
         Ok(())
     }
@@ -340,7 +339,10 @@ impl Benchmark {
             self.gateway.as_mut().unwrap().write_all(&payload)?;
 
             let mut response_payload: Vec<u8> = vec![0u8; mem::size_of::<u32>() + data.len()];
-            self.gateway.as_mut().unwrap().read_exact(&mut response_payload)?;
+            self.gateway
+                .as_mut()
+                .unwrap()
+                .read_exact(&mut response_payload)?;
             latencies.push(start.elapsed().as_micros());
 
             // Sanity-check the message to make sure is the same we sent.
@@ -354,11 +356,23 @@ impl Benchmark {
         }
 
         pb.finish();
-        println!("First req (includes nano VM boot time): {} us", latencies[0]);
+        println!(
+            "First req (includes nano VM boot time): {} us",
+            latencies[0]
+        );
         latencies.sort();
-        println!("p50: {} us", latencies[(num_iterations as f32 * 0.5) as usize]);
-        println!("p95: {} us", latencies[(num_iterations as f32 * 0.95) as usize]);
-        println!("p99: {} us", latencies[(num_iterations as f32 * 0.99) as usize]);
+        println!(
+            "p50: {} us",
+            latencies[(num_iterations as f32 * 0.5) as usize]
+        );
+        println!(
+            "p95: {} us",
+            latencies[(num_iterations as f32 * 0.95) as usize]
+        );
+        println!(
+            "p99: {} us",
+            latencies[(num_iterations as f32 * 0.99) as usize]
+        );
 
         Ok(())
     }
@@ -366,19 +380,19 @@ impl Benchmark {
     pub fn run_echo_breakdown(&mut self) -> Result<()> {
         let _steps: Vec<&str> = vec![
             // In-path
-            "gateway::recv()", // 0
-            "linuxd::handle_read_request()", // 1
-            "microvm::io::try_receive_from_gateway()", // 2
-            "microvm::io::try_send_to_microvm()", // 3
-            "microvm::mod::memory_thread::try_recv()", // 4
-            "microvm::mod::vm_input::vmexit()", // 5
+            "gateway::recv()",                          // 0
+            "linuxd::handle_read_request()",            // 1
+            "microvm::io::try_receive_from_gateway()",  // 2
+            "microvm::io::try_send_to_microvm()",       // 3
+            "microvm::mod::memory_thread::try_recv()",  // 4
+            "microvm::mod::vm_input::vmexit()",         // 5
             "microvm::mod::vm_input::vm_write_bytes()", // 7
             // Out-path
-            "microvm::mod::vm_output::try_send()", // 8
+            "microvm::mod::vm_output::try_send()",  // 8
             "microvm::io::try_recv_from_microvm()", // 9
-            "microvm::io::try_send_to_gateway()", // 10
-            "linuxd::handle_write_request()", // 11
-            "gateway::recv()", // 12
+            "microvm::io::try_send_to_gateway()",   // 10
+            "linuxd::handle_write_request()",       // 11
+            "gateway::recv()",                      // 12
         ];
 
         // The maximum number of steps is hard-coded in the macro definition.
@@ -391,13 +405,25 @@ impl Benchmark {
         // TODO: add start timestamp
 
         // Payload we are sending over the wire
-        println!("Raw Payload: {:?}", data[header_size..].iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>());
+        println!(
+            "Raw Payload: {:?}",
+            data[header_size..]
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<Vec<_>>()
+        );
         self.send_to_gateway(&data)?;
         let response = self.recv_from_gateway(data.len())?;
 
         // TODO: add end timestamp
 
-        println!("Raw Payload: {:?}", response[header_size..].iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>());
+        println!(
+            "Raw Payload: {:?}",
+            response[header_size..]
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<Vec<_>>()
+        );
         // Print results
         let mut first_timestamp: Option<u16> = None;
         let mut last_timestamp: Option<u16> = None;
@@ -414,7 +440,7 @@ impl Benchmark {
             print!("{step_idx:<2} | Timestamp {timestamp:5} us");
 
             if let Some(last) = last_timestamp {
-                let delta = timestamp.wrapping_sub(last);  // Handles wraparound
+                let delta = timestamp.wrapping_sub(last); // Handles wraparound
                 println!(" | Delta {delta:5} us");
             } else {
                 println!(" | First Step");
@@ -423,7 +449,10 @@ impl Benchmark {
             last_timestamp = Some(timestamp);
         }
         if first_timestamp.is_some() && last_timestamp.is_some() {
-            println!("Total time elapsed: {} us", last_timestamp.unwrap() - first_timestamp.unwrap());
+            println!(
+                "Total time elapsed: {} us",
+                last_timestamp.unwrap() - first_timestamp.unwrap()
+            );
         }
 
         Ok(())
@@ -469,7 +498,7 @@ fn main() -> Result<()> {
         linuxd_core_str: NANVIX_LINUXD_CORE_STR.to_string(),
         nanovm_core_str: NANVIX_NANOVM_CORE_STR.to_string(),
     };
-    let mut benchmark =  Benchmark {
+    let mut benchmark = Benchmark {
         hwloc,
         flavour: get_benchmark_flavour(),
         gateway_address: GATEWAY_ADDRESS.to_string(),
@@ -485,20 +514,26 @@ fn main() -> Result<()> {
 
     let result = match benchmark.flavour {
         BenchmarkFlavour::EchoBreakdown => {
-            println!("WARNING: this benchmark requires Nanvix (re-) compilation with TIMESTAMP_MSG=yes");
+            println!(
+                "WARNING: this benchmark requires Nanvix (re-) compilation with TIMESTAMP_MSG=yes"
+            );
             benchmark.run_echo_breakdown()
-        },
+        }
         BenchmarkFlavour::ColdStart => {
-            println!("WARNING: this benchmark requires Nanvix (re-) compilation with RELEASE=yes LOG_LEVEL=panic");
+            println!(
+                "WARNING: this benchmark requires Nanvix (re-) compilation with RELEASE=yes LOG_LEVEL=panic"
+            );
             benchmark.run_cold_start()
         }
         BenchmarkFlavour::WarmStart => {
-            println!("WARNING: this benchmark requires Nanvix (re-) compilation with RELEASE=yes LOG_LEVEL=panic");
+            println!(
+                "WARNING: this benchmark requires Nanvix (re-) compilation with RELEASE=yes LOG_LEVEL=panic"
+            );
             benchmark.run_warm_start()
         }
     };
     match result {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => error!("error running benchmark: {e:?}"),
     }
 
