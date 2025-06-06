@@ -1,7 +1,11 @@
 [package]
 name = "tcp-netcat"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
+flexi_logger = "0.29.6"
+indicatif = "0.17.11"
+log = "0.4.22"
+nix = { version = "0.30.1", features = ["process", "signal"] }
