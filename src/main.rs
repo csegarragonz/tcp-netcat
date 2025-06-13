@@ -135,7 +135,7 @@ fn profile(stream: &mut TcpStream) {
 }
 
 fn main() -> io::Result<()> {
-    let addr = "127.0.0.1:8888";
+    let addr = "192.168.249.3:1234";
     println!("Binding to {}...", addr);
     let listener = TcpListener::bind(addr)?;
 
